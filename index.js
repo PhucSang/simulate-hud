@@ -84,12 +84,11 @@ function makeDraggable(el) {
             settings.bubbleX = el.offsetLeft;
             settings.bubbleY = el.offsetTop;
             saveSettings();
+        } else {
+            // Tap: toggleHudMenu ở đây thay vì 'click'
+            // vì preventDefault() trong pointerdown suppress click trên mobile
+            toggleHudMenu();
         }
-    });
-
-    // click = tap (không phải drag) → toggle menu
-    el.addEventListener('click', () => {
-        if (!moved) toggleHudMenu();
     });
 }
 
