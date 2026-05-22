@@ -51,20 +51,24 @@ function placeBubble(bubble) {
 }
 
 function makeDraggable(el) {
-    let startX, startY, startLeft, startTop, moved;
+    let startX, startY, startLeft, startTop;
+    let isDown = false;
+    let moved  = false;
 
+    // pointerdown trên bubble — bắt đầu tracking
     el.addEventListener('pointerdown', (e) => {
         e.preventDefault();
-        el.setPointerCapture(e.pointerId);
+        isDown    = true;
+        moved     = false;
         startX    = e.clientX;
         startY    = e.clientY;
         startLeft = el.offsetLeft;
         startTop  = el.offsetTop;
-        moved     = false;
     });
 
-    el.addEventListener('pointermove', (e) => {
-        if (!el.hasPointerCapture(e.pointerId)) return;
+    // pointermove trên document — track drag (kể cả khi ngón tay ra ngoài bubble)
+    document.addEventListener('pointermove', (e) => {
+        if (!isDown) return;
         const dx = e.clientX - startX;
         const dy = e.clientY - startY;
         if (!moved && (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
@@ -76,19 +80,26 @@ function makeDraggable(el) {
         el.style.top  = clamp(startTop  + dy, 0, window.innerHeight - size) + 'px';
     });
 
-    el.addEventListener('pointerup', (e) => {
-        if (!el.hasPointerCapture(e.pointerId)) return;
-        el.releasePointerCapture(e.pointerId);
+    // pointerup trên document — kết thúc drag hoặc tap
+    document.addEventListener('pointerup', () => {
+        if (!isDown) return;
+        isDown = false;
+
         if (moved) {
+            moved = false;
             const settings = getSettings();
             settings.bubbleX = el.offsetLeft;
             settings.bubbleY = el.offsetTop;
             saveSettings();
         } else {
-            // Tap: toggleHudMenu ở đây thay vì 'click'
-            // vì preventDefault() trong pointerdown suppress click trên mobile
             toggleHudMenu();
         }
+    });
+
+    // pointercancel — reset trạng thái nếu bị interrupt
+    document.addEventListener('pointercancel', () => {
+        isDown = false;
+        moved  = false;
     });
 }
 
@@ -111,7 +122,6 @@ function createHudMenu() {
     `;
     document.body.appendChild(menu);
 
-    // Đóng khi bấm nút X — stopPropagation để document listener không fire
     menu.querySelector('.shud-close-btn').addEventListener('click', (e) => {
         e.stopPropagation();
         closeHudMenu();
@@ -124,10 +134,10 @@ function setupClickOutside() {
         const menu   = document.getElementById('shud-menu');
         const bubble = document.getElementById('shud-bubble');
         if (!menu?.classList.contains('shud-menu--open')) return;
-        if (menu.contains(e.target))   return; // click trong menu → không đóng
-        if (bubble?.contains(e.target)) return; // click bubble → bubble tự xử lý toggle
+        if (menu.contains(e.target))    return;
+        if (bubble?.contains(e.target)) return;
         closeHudMenu();
-    }, true); // useCapture = true để bắt trước ST handlers
+    }, true);
 }
 
 function openHudMenu() {
