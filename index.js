@@ -44,7 +44,7 @@ function clampBubble(el) {
     return { x, y };
 }
 
-function makeDraggable(el) {
+function makeDraggable(el, onTap) {
     let dragging = false;
     let hasMoved = false;
     let startClientX, startClientY;
@@ -82,6 +82,10 @@ function makeDraggable(el) {
         if (!dragging) return;
         dragging = false;
         el.classList.remove('dragging');
+        if (!hasMoved) {
+            onTap && onTap();
+            return;
+        }
         const { x, y } = clampBubble(el);
         const { saveSettingsDebounced } = SillyTavern.getContext();
         const settings = getSettings();
@@ -101,6 +105,72 @@ function makeDraggable(el) {
     document.addEventListener('mouseup', onEnd);
 }
 
+// ── HUD Menu ──────────────────────────────────────────────────────────────────
+
+function getMenu() {
+    return document.getElementById('simulate-hud-menu');
+}
+
+function getOverlay() {
+    return document.getElementById('simulate-hud-overlay');
+}
+
+function openMenu() {
+    if (getMenu()) return;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'simulate-hud-overlay';
+    overlay.addEventListener('click', closeMenu);
+    overlay.addEventListener('touchend', (e) => { e.preventDefault(); closeMenu(); }, { passive: false });
+
+    const menu = document.createElement('div');
+    menu.id = 'simulate-hud-menu';
+    menu.innerHTML = `
+        <div class="shud-menu-header">
+            <span class="shud-menu-title"><i class="fa-solid fa-dragon"></i> Simulate HUD</span>
+            <button class="shud-close-btn" id="simulate-hud-close"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="shud-menu-body">
+            <!-- HUD content goes here -->
+        </div>
+    `;
+
+    // Stop click/touch on menu from bubbling to overlay
+    menu.addEventListener('click',    (e) => e.stopPropagation());
+    menu.addEventListener('touchend', (e) => e.stopPropagation());
+
+    document.body.appendChild(overlay);
+    document.body.appendChild(menu);
+
+    document.getElementById('simulate-hud-close').addEventListener('click', closeMenu);
+
+    // Animate in
+    requestAnimationFrame(() => {
+        overlay.classList.add('visible');
+        menu.classList.add('visible');
+    });
+}
+
+function closeMenu() {
+    const overlay = getOverlay();
+    const menu    = getMenu();
+    if (!menu) return;
+
+    menu.classList.remove('visible');
+    overlay.classList.remove('visible');
+
+    menu.addEventListener('transitionend', () => {
+        menu.remove();
+        overlay.remove();
+    }, { once: true });
+}
+
+function toggleMenu() {
+    getMenu() ? closeMenu() : openMenu();
+}
+
+// ── Bubble ────────────────────────────────────────────────────────────────────
+
 function createBubble() {
     if (getBubble()) return;
 
@@ -113,13 +183,12 @@ function createBubble() {
         el.style.left = settings.bubbleX + 'px';
         el.style.top  = settings.bubbleY + 'px';
     } else {
-        // Default: bottom-right
         el.style.right  = '20px';
         el.style.bottom = '80px';
     }
 
     document.body.appendChild(el);
-    makeDraggable(el);
+    makeDraggable(el, toggleMenu);
     console.log(`[${MODULE_NAME}] Bubble created`);
 }
 

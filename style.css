@@ -7,7 +7,7 @@
 /* ── Floating Bubble ── */
 #simulate-hud-bubble {
     position: fixed;
-    z-index: 9999;
+    z-index: 9000;
     width: 52px;
     height: 52px;
     border-radius: 50%;
@@ -33,4 +33,96 @@
     cursor: grabbing;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65);
     transform: scale(1.08);
+}
+
+/* ── Overlay (backdrop) ── */
+#simulate-hud-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9100;
+    background: rgba(0, 0, 0, 0.45);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+#simulate-hud-overlay.visible {
+    opacity: 1;
+}
+
+/* ── HUD Menu Panel ── */
+#simulate-hud-menu {
+    position: fixed;
+    z-index: 9200;
+    /* Centered */
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -45%) scale(0.95);
+    /* Size: fills ~85% width, ~70% height — leaves gap around edges */
+    width: min(85vw, 420px);
+    height: 68vh;
+    max-height: 600px;
+    border-radius: 16px;
+    background: var(--grey-700, #1e1e2e);
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.7);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+#simulate-hud-menu.visible {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+}
+
+/* Header */
+.shud-menu-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px 12px;
+    background: rgba(123, 94, 167, 0.25);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    flex-shrink: 0;
+}
+
+.shud-menu-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #e0d7f5;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.shud-menu-title i {
+    color: #a98ee0;
+}
+
+.shud-close-btn {
+    background: none;
+    border: none;
+    color: #a0a0b8;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 8px;
+    transition: background 0.15s, color 0.15s;
+    line-height: 1;
+}
+
+.shud-close-btn:hover,
+.shud-close-btn:active {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+/* Body — scrollable */
+.shud-menu-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    color: #c9c3db;
+    font-size: 14px;
 }
