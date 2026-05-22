@@ -4,6 +4,12 @@ const defaultSettings = Object.freeze({
     enabled: false,
     bubbleX: null,
     bubbleY: null,
+    stats: Object.freeze({
+        energy:     { current: 100, max: 100 },
+        sustenance: { current: 100, max: 100 },
+        hygiene:    { current: 100, max: 100 },
+        boosts: [],
+    }),
 });
 
 function getSettings() {
@@ -13,9 +19,14 @@ function getSettings() {
     }
     for (const key of Object.keys(defaultSettings)) {
         if (!Object.hasOwn(extensionSettings[MODULE_NAME], key)) {
-            extensionSettings[MODULE_NAME][key] = defaultSettings[key];
+            extensionSettings[MODULE_NAME][key] = structuredClone(defaultSettings[key]);
         }
     }
+    const s = extensionSettings[MODULE_NAME].stats;
+    for (const sk of ['energy', 'sustenance', 'hygiene']) {
+        if (!s[sk]) s[sk] = structuredClone(defaultSettings.stats[sk]);
+    }
+    if (!Array.isArray(s.boosts)) s.boosts = [];
     return extensionSettings[MODULE_NAME];
 }
 
@@ -105,6 +116,103 @@ function makeDraggable(el, onTap) {
     document.addEventListener('mouseup', onEnd);
 }
 
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+
+const TABS = [
+    { id: 'vitals', label: 'Vitals', icon: 'fa-solid fa-heart-pulse' },
+];
+
+function getStatInfo(statId, current, max) {
+    const pct = max > 0 ? current / max : 0;
+    const info = {
+        energy: {
+            icon: 'fa-solid fa-bolt',
+            color: pct > 0.5 ? '#6be86b' : pct > 0.3 ? '#e8d46b' : pct > 0.15 ? '#e8946b' : '#e86b6b',
+            label: pct > 0.5 ? 'Normal' : pct > 0.3 ? 'Tired' : pct > 0.15 ? 'Exhausted' : current === 0 ? 'Passed Out' : 'Critical',
+        },
+        sustenance: {
+            icon: 'fa-solid fa-utensils',
+            color: pct >= 0.5 ? '#6be86b' : pct >= 0.25 ? '#e8d46b' : pct >= 0.1 ? '#e8a46b' : pct >= 0.01 ? '#e87a4a' : '#e86b6b',
+            label: pct >= 0.5 ? 'Normal' : pct >= 0.25 ? 'Hungry' : pct >= 0.1 ? 'Very Hungry' : pct >= 0.01 ? 'Starving' : 'Critical',
+        },
+        hygiene: {
+            icon: 'fa-solid fa-shower',
+            color: pct >= 0.6 ? '#6be8d4' : pct >= 0.3 ? '#6ba8e8' : pct >= 0.1 ? '#e8c46b' : '#e86b6b',
+            label: pct >= 0.6 ? 'Fresh' : pct >= 0.3 ? 'Noticeable' : pct >= 0.1 ? 'Dirty' : 'Very Dirty',
+        },
+    };
+    return info[statId] || { icon: 'fa-solid fa-circle', color: '#aaa', label: '' };
+}
+
+function renderStatCard(statId, statName, data) {
+    const { current, max } = data;
+    const pct = max > 0 ? Math.min(1, current / max) : 0;
+    const info = getStatInfo(statId, current, max);
+    const barW = Math.round(pct * 100);
+    return `
+        <div class="shud-stat-card">
+            <div class="shud-stat-header">
+                <span class="shud-stat-name">
+                    <i class="${info.icon}" style="color:${info.color}"></i> ${statName}
+                </span>
+                <span class="shud-stat-values">${current} / ${max}</span>
+            </div>
+            <div class="shud-bar-track">
+                <div class="shud-bar-fill" style="width:${barW}%;background:${info.color}"></div>
+            </div>
+            <div class="shud-stat-status" style="color:${info.color}">${info.label}</div>
+        </div>`;
+}
+
+function renderVitalsTab(stats) {
+    const boosts = stats.boosts || [];
+    const boostHTML = boosts.length === 0
+        ? '<div class="shud-no-boosts">No active boosts</div>'
+        : boosts.map(b => `
+            <div class="shud-boost-item">
+                <i class="fa-solid fa-arrow-up shud-boost-arrow"></i>
+                <span class="shud-boost-label">${b.name}</span>
+                <span class="shud-boost-effect">${b.stat} +${b.value}${b.temporary ? ' <span class="shud-boost-temp">(temp)</span>' : ''}</span>
+            </div>`).join('');
+
+    return `
+        <div class="shud-tab-content" id="shud-tab-vitals">
+            ${renderStatCard('energy',     'Energy',     stats.energy)}
+            ${renderStatCard('sustenance', 'Sustenance', stats.sustenance)}
+            ${renderStatCard('hygiene',    'Hygiene',    stats.hygiene)}
+            <div class="shud-boosts-section">
+                <div class="shud-boosts-title">
+                    <i class="fa-solid fa-fire-flame-curved"></i> Active Boosts
+                </div>
+                <div class="shud-boosts-list">${boostHTML}</div>
+            </div>
+        </div>`;
+}
+
+function renderMenuContent(menu) {
+    const settings = getSettings();
+    const stats = settings.stats || defaultSettings.stats;
+
+    const navItems = TABS.map((t, i) => `
+        <button class="shud-tab-btn${i === 0 ? ' active' : ''}" data-tab="${t.id}">
+            <i class="${t.icon}"></i> ${t.label}
+        </button>`).join('');
+
+    const body = menu.querySelector('.shud-menu-body');
+    body.innerHTML = `
+        <div class="shud-navbar">${navItems}</div>
+        <div class="shud-tab-area">
+            ${renderVitalsTab(stats)}
+        </div>`;
+
+    body.querySelectorAll('.shud-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            body.querySelectorAll('.shud-tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        });
+    });
+}
+
 // ── HUD Menu ──────────────────────────────────────────────────────────────────
 
 function getMenu() {
@@ -140,8 +248,7 @@ function openMenu() {
                 <i class="fa-solid fa-xmark"></i>
             </button>
         </div>
-        <div class="shud-menu-body">
-        </div>
+        <div class="shud-menu-body"></div>
     `;
 
     document.body.appendChild(overlay);
@@ -161,6 +268,7 @@ function openMenu() {
     };
 
     menu.querySelector('#simulate-hud-close').addEventListener('click', closeMenu);
+    renderMenuContent(menu);
 
     requestAnimationFrame(() => requestAnimationFrame(() => {
         overlay.classList.add('visible');
