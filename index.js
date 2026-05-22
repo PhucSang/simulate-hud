@@ -1,6 +1,6 @@
 const MODULE_NAME = 'simulate-hud';
 const EXTENSION_FOLDER = `third-party/${MODULE_NAME}`;
-const DRAG_THRESHOLD = 8; // px — below this = tap, above = drag
+const DRAG_THRESHOLD = 8;
 
 const defaultSettings = Object.freeze({
     enabled: false,
@@ -19,8 +19,11 @@ function getSettings() {
 }
 
 function saveSettings() {
-    const { saveSettingsDebounced } = SillyTavern.getContext();
-    saveSettingsDebounced();
+    SillyTavern.getContext().saveSettingsDebounced();
+}
+
+function clamp(val, min, max) {
+    return Math.min(max, Math.max(min, val));
 }
 
 // ─── Bubble ───────────────────────────────────────────────────────────────────
@@ -41,28 +44,31 @@ function createBubble() {
 function placeBubble(bubble) {
     const settings = getSettings();
     const size = 52;
-
-    const x = settings.bubbleX ?? (window.innerWidth - size - 16);
+    const x = settings.bubbleX ?? (window.innerWidth  - size - 16);
     const y = settings.bubbleY ?? (window.innerHeight - size - 80);
-
-    bubble.style.left = clamp(x, 0, window.innerWidth - size) + 'px';
+    bubble.style.left = clamp(x, 0, window.innerWidth  - size) + 'px';
     bubble.style.top  = clamp(y, 0, window.innerHeight - size) + 'px';
 }
 
 function makeDraggable(el) {
     let startX, startY, startLeft, startTop, moved;
 
-    function pointerDown(clientX, clientY) {
-        startX    = clientX;
-        startY    = clientY;
+    el.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        el.setPointerCapture(e.pointerId); // lock pointer to this element
+
+        startX    = e.clientX;
+        startY    = e.clientY;
         startLeft = el.offsetLeft;
         startTop  = el.offsetTop;
         moved     = false;
-    }
+    });
 
-    function pointerMove(clientX, clientY) {
-        const dx = clientX - startX;
-        const dy = clientY - startY;
+    el.addEventListener('pointermove', (e) => {
+        if (!el.hasPointerCapture(e.pointerId)) return;
+
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
 
         if (!moved && (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
             moved = true;
@@ -72,9 +78,12 @@ function makeDraggable(el) {
         const size = el.offsetWidth;
         el.style.left = clamp(startLeft + dx, 0, window.innerWidth  - size) + 'px';
         el.style.top  = clamp(startTop  + dy, 0, window.innerHeight - size) + 'px';
-    }
+    });
 
-    function pointerUp() {
+    el.addEventListener('pointerup', (e) => {
+        if (!el.hasPointerCapture(e.pointerId)) return;
+        el.releasePointerCapture(e.pointerId);
+
         if (moved) {
             const settings = getSettings();
             settings.bubbleX = el.offsetLeft;
@@ -83,88 +92,60 @@ function makeDraggable(el) {
         } else {
             toggleHudMenu();
         }
-    }
-
-    // Mouse
-    el.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        pointerDown(e.clientX, e.clientY);
-
-        function onMove(e) { pointerMove(e.clientX, e.clientY); }
-        function onUp()   { pointerUp(); document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); }
-
-        document.addEventListener('mousemove', onMove);
-        document.addEventListener('mouseup', onUp);
     });
-
-    // Touch (Android)
-    el.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        pointerDown(e.touches[0].clientX, e.touches[0].clientY);
-    }, { passive: false });
-
-    el.addEventListener('touchmove', (e) => {
-        e.preventDefault();
-        pointerMove(e.touches[0].clientX, e.touches[0].clientY);
-    }, { passive: false });
-
-    el.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        pointerUp();
-    }, { passive: false });
 }
 
 // ─── HUD Menu ─────────────────────────────────────────────────────────────────
 
 function createHudMenu() {
-    const existing = document.getElementById('shud-menu');
-    if (existing) return existing;
+    if (document.getElementById('shud-menu')) return;
+
+    // Backdrop — tap outside to close
+    const backdrop = document.createElement('div');
+    backdrop.id = 'shud-backdrop';
+    backdrop.addEventListener('pointerup', closeHudMenu);
+    document.body.appendChild(backdrop);
 
     const menu = document.createElement('div');
     menu.id = 'shud-menu';
     menu.innerHTML = `
         <div class="shud-menu-header">
             <span class="shud-menu-title">HUD</span>
-            <button class="shud-close-btn"><i class="fa-solid fa-xmark"></i></button>
+            <button class="shud-close-btn" type="button">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
         </div>
         <div class="shud-menu-body">
-            <!-- content goes here -->
         </div>
     `;
     document.body.appendChild(menu);
 
-    menu.querySelector('.shud-close-btn').addEventListener('click', closeHudMenu);
-    menu.querySelector('.shud-close-btn').addEventListener('touchend', (e) => {
-        e.preventDefault();
+    menu.querySelector('.shud-close-btn').addEventListener('pointerup', (e) => {
+        e.stopPropagation();
         closeHudMenu();
     });
+}
 
-    return menu;
+function openHudMenu() {
+    document.getElementById('shud-backdrop')?.classList.add('shud--visible');
+    document.getElementById('shud-menu')?.classList.add('shud-menu--open');
+}
+
+function closeHudMenu() {
+    document.getElementById('shud-backdrop')?.classList.remove('shud--visible');
+    document.getElementById('shud-menu')?.classList.remove('shud-menu--open');
 }
 
 function toggleHudMenu() {
     const menu = document.getElementById('shud-menu');
     if (!menu) return;
-    const isOpen = menu.classList.contains('shud-menu--open');
-    isOpen ? closeHudMenu() : openHudMenu();
-}
-
-function openHudMenu() {
-    const menu = document.getElementById('shud-menu');
-    if (menu) menu.classList.add('shud-menu--open');
-}
-
-function closeHudMenu() {
-    const menu = document.getElementById('shud-menu');
-    if (menu) menu.classList.remove('shud-menu--open');
+    menu.classList.contains('shud-menu--open') ? closeHudMenu() : openHudMenu();
 }
 
 // ─── Enable / Disable ─────────────────────────────────────────────────────────
 
 function applyEnabled(enabled) {
     const bubble = document.getElementById('shud-bubble');
-    const menu   = document.getElementById('shud-menu');
-
     if (enabled) {
         if (bubble) bubble.style.display = '';
     } else {
@@ -189,23 +170,17 @@ function syncUI() {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
-function clamp(val, min, max) {
-    return Math.min(max, Math.max(min, val));
-}
-
 async function init() {
     console.log(`[${MODULE_NAME}] Loading...`);
 
     const { renderExtensionTemplateAsync } = SillyTavern.getContext();
     const html = await renderExtensionTemplateAsync(EXTENSION_FOLDER, 'settings');
     document.getElementById('extensions_settings2').insertAdjacentHTML('beforeend', html);
-
     document.getElementById('simulate_hud_enabled').addEventListener('change', onEnabledChange);
 
     const bubble = createBubble();
     placeBubble(bubble);
     createHudMenu();
-
     syncUI();
 
     console.log(`[${MODULE_NAME}] Loaded.`);
