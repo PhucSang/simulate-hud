@@ -118,21 +118,23 @@ function getOverlay() {
 function openMenu() {
     if (getOverlay()) return;
 
-    // Use window.innerWidth/Height for pixel positioning —
-    // immune to parent CSS transforms that break position:fixed % calculations
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
+    // Use visualViewport when available — more accurate on mobile (accounts for
+    // browser chrome / virtual keyboard). Fall back to innerWidth/Height.
+    const vp = window.visualViewport || { width: window.innerWidth, height: window.innerHeight };
+    const vw = Math.round(vp.width);
+    const vh = Math.round(vp.height);
+
     const menuW = Math.min(Math.round(vw * 0.85), 420);
-    const menuH = Math.min(Math.round(vh * 0.68), 600);
+    const menuH = Math.min(Math.round(vh * 0.60), 560);   // 60vh so it fits with ST toolbar
     const menuLeft = Math.round((vw - menuW) / 2);
-    const menuTop  = Math.round((vh - menuH) / 2);
+    // Shift center down 8% to visually clear the ST top toolbar area
+    const menuTop  = Math.round((vh - menuH) / 2 + vh * 0.08);
 
     const overlay = document.createElement('div');
     overlay.id = 'simulate-hud-overlay';
 
     const menu = document.createElement('div');
     menu.id = 'simulate-hud-menu';
-    // Position set in JS so CSS transforms on ST ancestors can't affect it
     menu.style.cssText = `width:${menuW}px;height:${menuH}px;left:${menuLeft}px;top:${menuTop}px;`;
     menu.innerHTML = `
         <div class="shud-menu-header">
@@ -147,13 +149,24 @@ function openMenu() {
         </div>
     `;
 
-    // Overlay and menu are siblings under body (NOT nested)
     document.body.appendChild(overlay);
     document.body.appendChild(menu);
 
-    overlay.addEventListener('pointerup', closeMenu);
-    menu.addEventListener('pointerup', (e) => e.stopPropagation());
-    menu.querySelector('#simulate-hud-close').addEventListener('click', closeMenu);
+    // Close when tapping the backdrop — use all three event types for Android reliability
+    const onOverlayTap = (e) => { e.preventDefault(); e.stopPropagation(); closeMenu(); };
+    overlay.addEventListener('touchend', onOverlayTap, { passive: false });
+    overlay.addEventListener('pointerup', onOverlayTap);
+    overlay.addEventListener('click', closeMenu);
+
+    // Swallow all touch/pointer events on the menu so they never reach the overlay
+    ['touchstart','touchend','touchmove','pointerdown','pointerup','click'].forEach(ev =>
+        menu.addEventListener(ev, (e) => e.stopPropagation(), { passive: false })
+    );
+
+    menu.querySelector('#simulate-hud-close').addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeMenu();
+    });
 
     requestAnimationFrame(() => requestAnimationFrame(() => {
         overlay.classList.add('visible');
