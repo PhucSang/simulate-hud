@@ -1,0 +1,5 @@
+.simulate-hud-row {
+    display: flex;
+    align-items: center;
+    margin: 4px 0;
+}
