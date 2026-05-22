@@ -7,7 +7,7 @@
 /* ── Floating Bubble ── */
 #simulate-hud-bubble {
     position: fixed;
-    z-index: 9000;
+    z-index: 9999;
     width: 52px;
     height: 52px;
     border-radius: 50%;

@@ -118,17 +118,12 @@ function getOverlay() {
 function openMenu() {
     if (getOverlay()) return;
 
-    // Use visualViewport when available — more accurate on mobile (accounts for
-    // browser chrome / virtual keyboard). Fall back to innerWidth/Height.
-    const vp = window.visualViewport || { width: window.innerWidth, height: window.innerHeight };
-    const vw = Math.round(vp.width);
-    const vh = Math.round(vp.height);
-
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
     const menuW = Math.min(Math.round(vw * 0.85), 420);
-    const menuH = Math.min(Math.round(vh * 0.60), 560);   // 60vh so it fits with ST toolbar
+    const menuH = Math.min(Math.round(vh * 0.68), 600);
     const menuLeft = Math.round((vw - menuW) / 2);
-    // Shift center down 8% to visually clear the ST top toolbar area
-    const menuTop  = Math.round((vh - menuH) / 2 + vh * 0.08);
+    const menuTop  = Math.round((vh - menuH) / 2);
 
     const overlay = document.createElement('div');
     overlay.id = 'simulate-hud-overlay';
@@ -152,21 +147,20 @@ function openMenu() {
     document.body.appendChild(overlay);
     document.body.appendChild(menu);
 
-    // Close when tapping the backdrop — use all three event types for Android reliability
-    const onOverlayTap = (e) => { e.preventDefault(); e.stopPropagation(); closeMenu(); };
-    overlay.addEventListener('touchend', onOverlayTap, { passive: false });
-    overlay.addEventListener('pointerup', onOverlayTap);
-    overlay.addEventListener('click', closeMenu);
+    // Use document-level CAPTURE phase — fires before any stopPropagation in ST's own handlers.
+    // Close if tap lands outside the menu element.
+    const onDocTap = (e) => {
+        if (!menu.contains(e.target)) closeMenu();
+    };
+    document.addEventListener('touchend', onDocTap, true);
+    document.addEventListener('click',    onDocTap, true);
+    // Store cleanup on the overlay so closeMenu can remove them
+    overlay._cleanupTap = () => {
+        document.removeEventListener('touchend', onDocTap, true);
+        document.removeEventListener('click',    onDocTap, true);
+    };
 
-    // Swallow all touch/pointer events on the menu so they never reach the overlay
-    ['touchstart','touchend','touchmove','pointerdown','pointerup','click'].forEach(ev =>
-        menu.addEventListener(ev, (e) => e.stopPropagation(), { passive: false })
-    );
-
-    menu.querySelector('#simulate-hud-close').addEventListener('click', (e) => {
-        e.stopPropagation();
-        closeMenu();
-    });
+    menu.querySelector('#simulate-hud-close').addEventListener('click', closeMenu);
 
     requestAnimationFrame(() => requestAnimationFrame(() => {
         overlay.classList.add('visible');
@@ -179,10 +173,12 @@ function closeMenu() {
     const menu    = getMenu();
     if (!overlay) return;
 
+    // Remove document-level capture listeners first
+    if (overlay._cleanupTap) overlay._cleanupTap();
+
     overlay.classList.remove('visible');
     menu.classList.remove('visible');
 
-    // Wait for longest transition to finish then remove both
     overlay.addEventListener('transitionend', () => {
         overlay.remove();
         menu.remove();
