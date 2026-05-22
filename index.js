@@ -116,53 +116,53 @@ function getOverlay() {
 }
 
 function openMenu() {
-    if (getMenu()) return;
+    if (getOverlay()) return;
 
+    // Overlay acts as backdrop AND flex-container for centering
     const overlay = document.createElement('div');
     overlay.id = 'simulate-hud-overlay';
-    overlay.addEventListener('click', closeMenu);
-    overlay.addEventListener('touchend', (e) => { e.preventDefault(); closeMenu(); }, { passive: false });
 
     const menu = document.createElement('div');
     menu.id = 'simulate-hud-menu';
     menu.innerHTML = `
         <div class="shud-menu-header">
-            <span class="shud-menu-title"><i class="fa-solid fa-dragon"></i> Simulate HUD</span>
-            <button class="shud-close-btn" id="simulate-hud-close"><i class="fa-solid fa-xmark"></i></button>
+            <span class="shud-menu-title">
+                <i class="fa-solid fa-dragon"></i> Simulate HUD
+            </span>
+            <button class="shud-close-btn" id="simulate-hud-close">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
         </div>
         <div class="shud-menu-body">
-            <!-- HUD content goes here -->
         </div>
     `;
 
-    // Stop click/touch on menu from bubbling to overlay
-    menu.addEventListener('click',    (e) => e.stopPropagation());
-    menu.addEventListener('touchend', (e) => e.stopPropagation());
-
+    // Menu inside overlay — flex centering handles positioning
+    overlay.appendChild(menu);
     document.body.appendChild(overlay);
-    document.body.appendChild(menu);
 
-    document.getElementById('simulate-hud-close').addEventListener('click', closeMenu);
-
-    // Animate in
-    requestAnimationFrame(() => {
-        overlay.classList.add('visible');
-        menu.classList.add('visible');
+    // Tap backdrop (overlay itself, not menu) → close
+    overlay.addEventListener('pointerup', (e) => {
+        if (e.target === overlay) closeMenu();
     });
+
+    // Prevent menu touches from reaching overlay
+    menu.addEventListener('pointerup', (e) => e.stopPropagation());
+
+    menu.querySelector('#simulate-hud-close').addEventListener('click', closeMenu);
+
+    // Two rAF frames: first lets browser paint initial state, second triggers transition
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+        overlay.classList.add('visible');
+    }));
 }
 
 function closeMenu() {
     const overlay = getOverlay();
-    const menu    = getMenu();
-    if (!menu) return;
+    if (!overlay) return;
 
-    menu.classList.remove('visible');
     overlay.classList.remove('visible');
-
-    menu.addEventListener('transitionend', () => {
-        menu.remove();
-        overlay.remove();
-    }, { once: true });
+    overlay.addEventListener('transitionend', () => overlay.remove(), { once: true });
 }
 
 function toggleMenu() {

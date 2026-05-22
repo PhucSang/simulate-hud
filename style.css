@@ -35,45 +35,50 @@
     transform: scale(1.08);
 }
 
-/* ── Overlay (backdrop) ── */
+/* ── Overlay — fullscreen backdrop + flex container ── */
 #simulate-hud-overlay {
     position: fixed;
     inset: 0;
     z-index: 9100;
-    background: rgba(0, 0, 0, 0.45);
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* animate */
     opacity: 0;
-    transition: opacity 0.2s ease;
+    transition: opacity 0.22s ease;
+    touch-action: manipulation;
 }
 
 #simulate-hud-overlay.visible {
     opacity: 1;
 }
 
+#simulate-hud-overlay.visible #simulate-hud-menu {
+    transform: scale(1);
+    opacity: 1;
+}
+
 /* ── HUD Menu Panel ── */
 #simulate-hud-menu {
-    position: fixed;
-    z-index: 9200;
-    /* Centered */
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -45%) scale(0.95);
-    /* Size: fills ~85% width, ~70% height — leaves gap around edges */
-    width: min(85vw, 420px);
+    /* sizing */
+    width: 85vw;
+    max-width: 420px;
     height: 68vh;
     max-height: 600px;
+    /* look */
     border-radius: 16px;
-    background: var(--grey-700, #1e1e2e);
-    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.7);
+    background: #1a1a2e;
+    box-shadow: 0 16px 56px rgba(0, 0, 0, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    /* layout */
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    /* animate — driven by overlay.visible */
     opacity: 0;
-    transition: opacity 0.2s ease, transform 0.2s ease;
-}
-
-#simulate-hud-menu.visible {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
+    transform: scale(0.93);
+    transition: opacity 0.22s ease, transform 0.22s ease;
 }
 
 /* Header */
@@ -81,8 +86,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 14px 16px 12px;
-    background: rgba(123, 94, 167, 0.25);
+    padding: 14px 12px 12px 16px;
+    background: rgba(123, 94, 167, 0.2);
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     flex-shrink: 0;
 }
@@ -101,24 +106,27 @@
 }
 
 .shud-close-btn {
-    background: none;
-    border: none;
-    color: #a0a0b8;
-    font-size: 18px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #c0b8d8;
+    font-size: 16px;
     cursor: pointer;
-    padding: 4px 8px;
+    width: 34px;
+    height: 34px;
     border-radius: 8px;
-    transition: background 0.15s, color 0.15s;
-    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    touch-action: manipulation;
 }
 
-.shud-close-btn:hover,
 .shud-close-btn:active {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.18);
     color: #fff;
 }
 
-/* Body — scrollable */
+/* Body */
 .shud-menu-body {
     flex: 1;
     overflow-y: auto;
