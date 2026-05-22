@@ -53,7 +53,6 @@ function placeBubble(bubble) {
 function makeDraggable(el) {
     let startX, startY, startLeft, startTop, moved;
 
-    // ── Pointer events: chỉ xử lý drag ──────────────────────────────────────
     el.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         el.setPointerCapture(e.pointerId);
@@ -68,12 +67,10 @@ function makeDraggable(el) {
         if (!el.hasPointerCapture(e.pointerId)) return;
         const dx = e.clientX - startX;
         const dy = e.clientY - startY;
-
         if (!moved && (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
             moved = true;
         }
         if (!moved) return;
-
         const size = el.offsetWidth;
         el.style.left = clamp(startLeft + dx, 0, window.innerWidth  - size) + 'px';
         el.style.top  = clamp(startTop  + dy, 0, window.innerHeight - size) + 'px';
@@ -82,18 +79,15 @@ function makeDraggable(el) {
     el.addEventListener('pointerup', (e) => {
         if (!el.hasPointerCapture(e.pointerId)) return;
         el.releasePointerCapture(e.pointerId);
-
         if (moved) {
             const settings = getSettings();
             settings.bubbleX = el.offsetLeft;
             settings.bubbleY = el.offsetTop;
             saveSettings();
         }
-        // Tap toggle handled by 'click' below — không dùng pointerup ở đây
     });
 
-    // ── Click: tap để toggle menu ─────────────────────────────────────────────
-    // 'click' fires sau pointerup trong event cycle mới — tránh conflict với backdrop
+    // click = tap (không phải drag) → toggle menu
     el.addEventListener('click', () => {
         if (!moved) toggleHudMenu();
     });
@@ -103,11 +97,6 @@ function makeDraggable(el) {
 
 function createHudMenu() {
     if (document.getElementById('shud-menu')) return;
-
-    const backdrop = document.createElement('div');
-    backdrop.id = 'shud-backdrop';
-    backdrop.addEventListener('click', closeHudMenu);
-    document.body.appendChild(backdrop);
 
     const menu = document.createElement('div');
     menu.id = 'shud-menu';
@@ -123,19 +112,30 @@ function createHudMenu() {
     `;
     document.body.appendChild(menu);
 
+    // Đóng khi bấm nút X — stopPropagation để document listener không fire
     menu.querySelector('.shud-close-btn').addEventListener('click', (e) => {
         e.stopPropagation();
         closeHudMenu();
     });
 }
 
+// Click bên ngoài menu và bubble → đóng menu
+function setupClickOutside() {
+    document.addEventListener('click', (e) => {
+        const menu   = document.getElementById('shud-menu');
+        const bubble = document.getElementById('shud-bubble');
+        if (!menu?.classList.contains('shud-menu--open')) return;
+        if (menu.contains(e.target))   return; // click trong menu → không đóng
+        if (bubble?.contains(e.target)) return; // click bubble → bubble tự xử lý toggle
+        closeHudMenu();
+    }, true); // useCapture = true để bắt trước ST handlers
+}
+
 function openHudMenu() {
-    document.getElementById('shud-backdrop')?.classList.add('shud--visible');
     document.getElementById('shud-menu')?.classList.add('shud-menu--open');
 }
 
 function closeHudMenu() {
-    document.getElementById('shud-backdrop')?.classList.remove('shud--visible');
     document.getElementById('shud-menu')?.classList.remove('shud-menu--open');
 }
 
@@ -184,6 +184,7 @@ async function init() {
     const bubble = createBubble();
     placeBubble(bubble);
     createHudMenu();
+    setupClickOutside();
     syncUI();
 
     console.log(`[${MODULE_NAME}] Loaded.`);
