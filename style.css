@@ -3,3 +3,34 @@
     align-items: center;
     margin: 4px 0;
 }
+
+/* ── Floating Bubble ── */
+#simulate-hud-bubble {
+    position: fixed;
+    z-index: 9999;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #7b5ea7, #4a3f6b);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    transition: box-shadow 0.15s, transform 0.15s;
+}
+
+#simulate-hud-bubble i {
+    color: #fff;
+    font-size: 22px;
+    pointer-events: none;
+}
+
+#simulate-hud-bubble.dragging {
+    cursor: grabbing;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65);
+    transform: scale(1.08);
+}
