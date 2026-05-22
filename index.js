@@ -53,10 +53,10 @@ function placeBubble(bubble) {
 function makeDraggable(el) {
     let startX, startY, startLeft, startTop, moved;
 
+    // ── Pointer events: chỉ xử lý drag ──────────────────────────────────────
     el.addEventListener('pointerdown', (e) => {
         e.preventDefault();
-        el.setPointerCapture(e.pointerId); // lock pointer to this element
-
+        el.setPointerCapture(e.pointerId);
         startX    = e.clientX;
         startY    = e.clientY;
         startLeft = el.offsetLeft;
@@ -66,7 +66,6 @@ function makeDraggable(el) {
 
     el.addEventListener('pointermove', (e) => {
         if (!el.hasPointerCapture(e.pointerId)) return;
-
         const dx = e.clientX - startX;
         const dy = e.clientY - startY;
 
@@ -89,9 +88,14 @@ function makeDraggable(el) {
             settings.bubbleX = el.offsetLeft;
             settings.bubbleY = el.offsetTop;
             saveSettings();
-        } else {
-            toggleHudMenu();
         }
+        // Tap toggle handled by 'click' below — không dùng pointerup ở đây
+    });
+
+    // ── Click: tap để toggle menu ─────────────────────────────────────────────
+    // 'click' fires sau pointerup trong event cycle mới — tránh conflict với backdrop
+    el.addEventListener('click', () => {
+        if (!moved) toggleHudMenu();
     });
 }
 
@@ -100,10 +104,9 @@ function makeDraggable(el) {
 function createHudMenu() {
     if (document.getElementById('shud-menu')) return;
 
-    // Backdrop — tap outside to close
     const backdrop = document.createElement('div');
     backdrop.id = 'shud-backdrop';
-    backdrop.addEventListener('pointerup', closeHudMenu);
+    backdrop.addEventListener('click', closeHudMenu);
     document.body.appendChild(backdrop);
 
     const menu = document.createElement('div');
@@ -120,7 +123,7 @@ function createHudMenu() {
     `;
     document.body.appendChild(menu);
 
-    menu.querySelector('.shud-close-btn').addEventListener('pointerup', (e) => {
+    menu.querySelector('.shud-close-btn').addEventListener('click', (e) => {
         e.stopPropagation();
         closeHudMenu();
     });
