@@ -118,12 +118,22 @@ function getOverlay() {
 function openMenu() {
     if (getOverlay()) return;
 
-    // Overlay acts as backdrop AND flex-container for centering
+    // Use window.innerWidth/Height for pixel positioning —
+    // immune to parent CSS transforms that break position:fixed % calculations
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const menuW = Math.min(Math.round(vw * 0.85), 420);
+    const menuH = Math.min(Math.round(vh * 0.68), 600);
+    const menuLeft = Math.round((vw - menuW) / 2);
+    const menuTop  = Math.round((vh - menuH) / 2);
+
     const overlay = document.createElement('div');
     overlay.id = 'simulate-hud-overlay';
 
     const menu = document.createElement('div');
     menu.id = 'simulate-hud-menu';
+    // Position set in JS so CSS transforms on ST ancestors can't affect it
+    menu.style.cssText = `width:${menuW}px;height:${menuH}px;left:${menuLeft}px;top:${menuTop}px;`;
     menu.innerHTML = `
         <div class="shud-menu-header">
             <span class="shud-menu-title">
@@ -137,32 +147,33 @@ function openMenu() {
         </div>
     `;
 
-    // Menu inside overlay — flex centering handles positioning
-    overlay.appendChild(menu);
+    // Overlay and menu are siblings under body (NOT nested)
     document.body.appendChild(overlay);
+    document.body.appendChild(menu);
 
-    // Tap backdrop (overlay itself, not menu) → close
-    overlay.addEventListener('pointerup', (e) => {
-        if (e.target === overlay) closeMenu();
-    });
-
-    // Prevent menu touches from reaching overlay
+    overlay.addEventListener('pointerup', closeMenu);
     menu.addEventListener('pointerup', (e) => e.stopPropagation());
-
     menu.querySelector('#simulate-hud-close').addEventListener('click', closeMenu);
 
-    // Two rAF frames: first lets browser paint initial state, second triggers transition
     requestAnimationFrame(() => requestAnimationFrame(() => {
         overlay.classList.add('visible');
+        menu.classList.add('visible');
     }));
 }
 
 function closeMenu() {
     const overlay = getOverlay();
+    const menu    = getMenu();
     if (!overlay) return;
 
     overlay.classList.remove('visible');
-    overlay.addEventListener('transitionend', () => overlay.remove(), { once: true });
+    menu.classList.remove('visible');
+
+    // Wait for longest transition to finish then remove both
+    overlay.addEventListener('transitionend', () => {
+        overlay.remove();
+        menu.remove();
+    }, { once: true });
 }
 
 function toggleMenu() {

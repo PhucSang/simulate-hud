@@ -35,16 +35,15 @@
     transform: scale(1.08);
 }
 
-/* ── Overlay — fullscreen backdrop + flex container ── */
+/* ── Overlay (backdrop only) ── */
 #simulate-hud-overlay {
     position: fixed;
-    inset: 0;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
     z-index: 9100;
     background: rgba(0, 0, 0, 0.5);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    /* animate */
     opacity: 0;
     transition: opacity 0.22s ease;
     touch-action: manipulation;
@@ -54,31 +53,26 @@
     opacity: 1;
 }
 
-#simulate-hud-overlay.visible #simulate-hud-menu {
-    transform: scale(1);
-    opacity: 1;
-}
-
 /* ── HUD Menu Panel ── */
+/* width / height / left / top are injected by JS */
 #simulate-hud-menu {
-    /* sizing */
-    width: 85vw;
-    max-width: 420px;
-    height: 68vh;
-    max-height: 600px;
-    /* look */
+    position: fixed;
+    z-index: 9200;
     border-radius: 16px;
     background: #1a1a2e;
     box-shadow: 0 16px 56px rgba(0, 0, 0, 0.75);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    /* layout */
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    /* animate — driven by overlay.visible */
     opacity: 0;
     transform: scale(0.93);
     transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+#simulate-hud-menu.visible {
+    opacity: 1;
+    transform: scale(1);
 }
 
 /* Header */
