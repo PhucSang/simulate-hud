@@ -44,6 +44,7 @@ function createBubble() {
 function placeBubble(bubble) {
     const settings = getSettings();
     const size = 52;
+    // default: bottom-right corner
     const x = settings.bubbleX ?? (window.innerWidth  - size - 16);
     const y = settings.bubbleY ?? (window.innerHeight - size - 80);
     bubble.style.left = clamp(x, 0, window.innerWidth  - size) + 'px';
@@ -52,23 +53,57 @@ function placeBubble(bubble) {
 
 function makeDraggable(el) {
     let startX, startY, startLeft, startTop;
-    let isDown = false;
-    let moved  = false;
+    let moved = false;
 
-    // pointerdown trên bubble — bắt đầu tracking
-    el.addEventListener('pointerdown', (e) => {
-        e.preventDefault();
-        isDown    = true;
+    // ── touch (mobile) ──────────────────────────────────────────────────────
+    el.addEventListener('touchstart', (e) => {
+        const t = e.touches[0];
+        startX    = t.clientX;
+        startY    = t.clientY;
+        startLeft = el.offsetLeft;
+        startTop  = el.offsetTop;
         moved     = false;
+    }, { passive: true });
+
+    el.addEventListener('touchmove', (e) => {
+        const t  = e.touches[0];
+        const dx = t.clientX - startX;
+        const dy = t.clientY - startY;
+        if (!moved && (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
+            moved = true;
+        }
+        if (!moved) return;
+        e.preventDefault();
+        const size = el.offsetWidth;
+        el.style.left = clamp(startLeft + dx, 0, window.innerWidth  - size) + 'px';
+        el.style.top  = clamp(startTop  + dy, 0, window.innerHeight - size) + 'px';
+    }, { passive: false });
+
+    el.addEventListener('touchend', (e) => {
+        if (!moved) {
+            e.preventDefault(); // ngăn click event tổng hợp kép
+            toggleHudMenu();
+        } else {
+            const settings = getSettings();
+            settings.bubbleX = el.offsetLeft;
+            settings.bubbleY = el.offsetTop;
+            saveSettings();
+        }
+        moved = false;
+    });
+
+    // ── mouse (desktop) ─────────────────────────────────────────────────────
+    el.addEventListener('mousedown', (e) => {
+        e.preventDefault();
         startX    = e.clientX;
         startY    = e.clientY;
         startLeft = el.offsetLeft;
         startTop  = el.offsetTop;
+        moved     = false;
     });
 
-    // pointermove trên document — track drag (kể cả khi ngón tay ra ngoài bubble)
-    document.addEventListener('pointermove', (e) => {
-        if (!isDown) return;
+    document.addEventListener('mousemove', (e) => {
+        if (e.buttons !== 1 || startX === undefined) return;
         const dx = e.clientX - startX;
         const dy = e.clientY - startY;
         if (!moved && (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
@@ -80,25 +115,17 @@ function makeDraggable(el) {
         el.style.top  = clamp(startTop  + dy, 0, window.innerHeight - size) + 'px';
     });
 
-    // pointerup trên document — kết thúc drag hoặc tap
-    document.addEventListener('pointerup', () => {
-        if (!isDown) return;
-        isDown = false;
-
-        if (moved) {
-            moved = false;
+    document.addEventListener('mouseup', () => {
+        if (startX === undefined) return;
+        if (!moved) {
+            toggleHudMenu();
+        } else {
             const settings = getSettings();
             settings.bubbleX = el.offsetLeft;
             settings.bubbleY = el.offsetTop;
             saveSettings();
-        } else {
-            toggleHudMenu();
         }
-    });
-
-    // pointercancel — reset trạng thái nếu bị interrupt
-    document.addEventListener('pointercancel', () => {
-        isDown = false;
+        startX = undefined;
         moved  = false;
     });
 }
@@ -128,8 +155,17 @@ function createHudMenu() {
     });
 }
 
-// Click bên ngoài menu và bubble → đóng menu
+// Click/touch bên ngoài menu và bubble → đóng menu
 function setupClickOutside() {
+    document.addEventListener('touchend', (e) => {
+        const menu   = document.getElementById('shud-menu');
+        const bubble = document.getElementById('shud-bubble');
+        if (!menu?.classList.contains('shud-menu--open')) return;
+        if (menu.contains(e.target))    return;
+        if (bubble?.contains(e.target)) return;
+        closeHudMenu();
+    }, true);
+
     document.addEventListener('click', (e) => {
         const menu   = document.getElementById('shud-menu');
         const bubble = document.getElementById('shud-bubble');
