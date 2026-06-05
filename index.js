@@ -12,21 +12,23 @@ const defaultSettings = Object.freeze({
     }),
 });
 
+let settingsCache = null;
+
 function getSettings() {
+    if (settingsCache) return settingsCache;
+
     const { extensionSettings } = SillyTavern.getContext();
     if (!extensionSettings[MODULE_NAME]) {
         extensionSettings[MODULE_NAME] = structuredClone(defaultSettings);
     }
-    for (const key of Object.keys(defaultSettings)) {
-        if (!Object.hasOwn(extensionSettings[MODULE_NAME], key)) {
-            extensionSettings[MODULE_NAME][key] = structuredClone(defaultSettings[key]);
-        }
-    }
-    const s = extensionSettings[MODULE_NAME].stats;
+
+    const s = extensionSettings[MODULE_NAME].stats || {};
     for (const sk of ['energy', 'sustenance', 'hygiene']) {
         if (!s[sk]) s[sk] = structuredClone(defaultSettings.stats[sk]);
     }
     if (!Array.isArray(s.boosts)) s.boosts = [];
+
+    settingsCache = extensionSettings[MODULE_NAME];
     return extensionSettings[MODULE_NAME];
 }
 
@@ -101,7 +103,9 @@ function makeDraggable(el, onTap) {
         const { saveSettingsDebounced } = SillyTavern.getContext();
         const settings = getSettings();
         settings.bubbleX = x;
+        settingsCache.bubbleX = x; // Update cache
         settings.bubbleY = y;
+        settingsCache.bubbleY = y;
         saveSettingsDebounced();
     }
 
