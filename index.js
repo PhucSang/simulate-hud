@@ -301,15 +301,62 @@ function toggleMenu() {
     getMenu() ? closeMenu() : openMenu();
 }
 
+// ── Data Logic ──────────────────────────────────────────────────────────────
+
+/**
+ * Cập nhật chỉ số từ dữ liệu nhận được từ AI
+ */
+function updateStatsFromAI(data) {
+    const settings = getSettings();
+    let changed = false;
+
+    const keys = ['energy', 'sustenance', 'hygiene'];
+    keys.forEach(key => {
+        if (typeof data[key] === 'number') {
+            settings.stats[key].current = Math.max(0, Math.min(settings.stats[key].max, data[key]));
+            changed = true;
+        }
+    });
+
+    if (changed) {
+        const { saveSettingsDebounced } = SillyTavern.getContext();
+        saveSettingsDebounced();
+        
+        // Cập nhật giao diện nếu Menu đang mở
+        const menu = getMenu();
+        if (menu) renderMenuContent(menu);
+    }
+}
+
+/**
+ * Xử lý tin nhắn đến để tìm JSON ẩn
+ */
+async function onMessageReceived(index) {
+    const { chat } = SillyTavern.getContext();
+    const message = chat[index];
+
+    if (!message || message.is_user) return;
+
+    // Tìm format: <!--SHUD{"energy": 80, ...}-->
+    const regex = /<!--SHUD(\{[\s\S]*?\})-->/g;
+    const match = regex.exec(message.mes);
+
+    if (match && match[1]) {
+        try {
+            const data = JSON.parse(match[1]);
+            updateStatsFromAI(data);
+            
+            // Ẩn JSON khỏi nội dung hiển thị của User
+            message.mes = message.mes.replace(regex, '').trim();
+        } catch (e) {
+            console.error(`[${MODULE_NAME}] Failed to parse HUD JSON:`, e);
+        }
+    }
+}
+
 // ── Bubble ────────────────────────────────────────────────────────────────────
 
 function createBubble() {
-    if (getBubble()) return;
-
-    const el = document.createElement('div');
-    el.id = 'simulate-hud-bubble';
-    el.innerHTML = '<i class="fa-solid fa-dragon"></i>';
-
     const settings = getSettings();
     if (settings.bubbleX !== null && settings.bubbleY !== null) {
         el.style.left = settings.bubbleX + 'px';
@@ -359,11 +406,21 @@ function syncUI() {
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 async function init() {
-    console.log(`[${MODULE_NAME}] Loading...`);
+    const { renderExtensionTemplateAsync, addExtensionPrompt, extensionPromptRoles } = SillyTavern.getContext();
+    
     try {
-        const { renderExtensionTemplateAsync } = SillyTavern.getContext();
         const html = await renderExtensionTemplateAsync(`third-party/${MODULE_NAME}`, 'settings');
         $('#extensions_settings2').append(html);
+
+        // Inject chỉ dẫn cho AI (Prompt này sẽ luôn đi kèm trong context chat)
+        addExtensionPrompt(
+            `[Simulate HUD] At the end of EVERY response, you MUST append a hidden status update in this EXACT format:
+            <!--SHUD{"energy": value, "sustenance": value, "hygiene": value}-->
+            Current stats range from 0 to 100. Adjust values based on the actions in your response.`,
+            'shud_instruction',
+            extensionPromptRoles.SYSTEM,
+            0
+        );
 
         $('#simulate_hud_enabled').on('change', onEnabledChange);
 
@@ -377,3 +434,4 @@ async function init() {
 
 const { eventSource, event_types } = SillyTavern.getContext();
 eventSource.on(event_types.APP_READY, init);
+eventSource.on(event_types.MESSAGE_RECEIVED, onMessageReceived);
