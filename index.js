@@ -418,13 +418,14 @@ async function init() {
         const html = await renderExtensionTemplateAsync(`third-party/${MODULE_NAME}`, 'settings');
         $('#extensions_settings2').append(html);
 
+        const systemRole = extensionPromptRoles ? extensionPromptRoles.SYSTEM : 0;
         // Inject chỉ dẫn cho AI (Prompt này sẽ luôn đi kèm trong context chat)
         addExtensionPrompt(
             `[Simulate HUD] At the end of EVERY response, you MUST append a hidden status update in this EXACT format:
             <!--SHUD{"energy": value, "sustenance": value, "hygiene": value}-->
             Current stats range from 0 to 100. Adjust values based on the actions in your response.`,
             'shud_instruction',
-            extensionPromptRoles.SYSTEM,
+            systemRole,
             0
         );
 
