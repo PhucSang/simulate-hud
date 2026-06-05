@@ -357,6 +357,12 @@ async function onMessageReceived(index) {
 // ── Bubble ────────────────────────────────────────────────────────────────────
 
 function createBubble() {
+    if (getBubble()) return;
+
+    const el = document.createElement('div');
+    el.id = 'simulate-hud-bubble';
+    el.innerHTML = '<i class="fa-solid fa-dragon"></i>';
+
     const settings = getSettings();
     if (settings.bubbleX !== null && settings.bubbleY !== null) {
         el.style.left = settings.bubbleX + 'px';
