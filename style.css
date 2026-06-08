@@ -180,6 +180,12 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
+    /* Hide all tab content by default */
+    display: none;
+}
+.shud-tab-content.active {
+    /* Show active tab content */
+    display: flex;
 }
 
 /* ── Stat Card ── */
