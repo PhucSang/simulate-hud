@@ -209,8 +209,6 @@ function renderMenuContent(menu) {
         btn.addEventListener('click', () => {
             body.querySelectorAll('.shud-tab-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            body.querySelectorAll('.shud-tab-content').forEach(content => content.classList.remove('active'));
-            document.getElementById(`shud-tab-${btn.dataset.tab}`).classList.add('active');
         });
     });
 }

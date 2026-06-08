@@ -1,6 +1,8 @@
 {
     "display_name": "Simulate HUD",
     "loading_order": 100,
+    "requires": [],
+    "optional": [],
     "js": "index.js",
     "css": "style.css",
     "author": "PhucSang",
