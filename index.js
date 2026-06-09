@@ -297,7 +297,7 @@ function toggleMenu() {
     getMenu() ? closeMenu() : openMenu();
 }
 
-// ── Bubble ────────────────────────────────────────────────────────────────────
+// ── Bubble Creation ────────────────────────────────────────────────────────────
 
 function createBubble() {
     if (getBubble()) return;
@@ -352,16 +352,143 @@ function syncUI() {
     $('#simulate_hud_enabled').prop('checked', settings.enabled);
 }
 
+// ── Stats Update ───────────────────────────────────────────────────────────────
+
+function updateStatsFromJSON(statsData) {
+    const { saveSettingsDebounced } = SillyTavern.getContext();
+    const settings = getSettings();
+    
+    if (typeof statsData.energy === 'number') {
+        settings.stats.energy.current = Math.max(0, Math.min(100, statsData.energy));
+    }
+    if (typeof statsData.sustenance === 'number') {
+        settings.stats.sustenance.current = Math.max(0, Math.min(100, statsData.sustenance));
+    }
+    if (typeof statsData.hygiene === 'number') {
+        settings.stats.hygiene.current = Math.max(0, Math.min(100, statsData.hygiene));
+    }
+    
+    saveSettingsDebounced();
+    
+    // Re-render menu if open
+    const menu = getMenu();
+    if (menu) {
+        renderMenuContent(menu);
+    }
+    
+    console.log(`[${MODULE_NAME}] Stats updated:`, statsData);
+}
+
+function parseStatsFromMessage(message) {
+    const match = message.match(/<simulate_hud>\s*([\s\S]*?)\s*<\/simulate_hud>/);
+    if (!match) return null;
+    
+    try {
+        const jsonStr = match[1].trim();
+        const data = JSON.parse(jsonStr);
+        return data;
+    } catch (e) {
+        console.warn(`[${MODULE_NAME}] Failed to parse stats JSON:`, e);
+        return null;
+    }
+}
+
+// ── Message Formatter Hook (Hide JSON from display) ──────────────────────────────
+
+function setupMessageFormatter() {
+    const { messageFormatter } = SillyTavern.getContext();
+    
+    messageFormatter.addHook((mes, ctx) => {
+        // Remove the entire simulate_hud block from display
+        return mes.replace(/<simulate_hud>[\s\S]*?<\/simulate_hud>/g, '');
+    }, {
+        stage: messageFormatter.stage.AFTER_MARKDOWN,
+        order: messageFormatter.order.EARLIEST,
+    });
+}
+
+// ── Event Handlers ───────────────────────────────────────────────────────────────
+
+function onCharacterMessageRendered(data) {
+    const stats = parseStatsFromMessage(data.mes);
+    if (stats) {
+        updateStatsFromJSON(stats);
+    }
+}
+
+// ── Generate Interceptor ────────────────────────────────────────────────────────
+
+const SIMULATE_HUD_INSTRUCTION = `[SIMULATE HUD INSTRUCTION - HIDDEN FROM USER]
+After your roleplay response, you MUST include a stats update block. Analyze what happened in the scene and update the user's stats realistically.
+
+Consider:
+- Energy: decreases with physical/mental exertion, rest restores it
+- Sustenance: decreases over time, eating restores it  
+- Hygiene: decreases with dirty activities, cleaning restores it
+
+Output this EXACT XML block at the END of your response (after your roleplay text):
+<simulate_hud>
+{
+  "energy": <number 0-100>,
+  "sustenance": <number 0-100>,
+  "hygiene": <number 0-100>,
+  "status": "<brief status description>"
+}
+</simulate_hud>
+
+Example: If the user just exercised, energy should drop. If they ate, sustenance should rise. Be realistic and consistent with previous values.`;
+
+globalThis.simulateHUDInterceptor = async function(chat, contextSize, abort, type) {
+    // Only inject for normal generation (not quiet, impersonate, etc.)
+    if (type === 'quiet' || type === 'impersonate') return;
+    
+    // Find the last user message index
+    let lastUserIdx = -1;
+    for (let i = chat.length - 1; i >= 0; i--) {
+        if (chat[i].is_user) {
+            lastUserIdx = i;
+            break;
+        }
+    }
+    
+    if (lastUserIdx === -1) return;
+    
+    // Check if there's already a system message for this (avoid duplicates)
+    for (let i = lastUserIdx + 1; i < chat.length; i++) {
+        if (chat[i].name === 'System' && chat[i].mes?.includes('SIMULATE HUD INSTRUCTION')) {
+            return; // Already injected
+        }
+    }
+    
+    // Insert instruction as a system message after the last user message
+    const systemMessage = {
+        is_user: false,
+        name: 'System',
+        mes: SIMULATE_HUD_INSTRUCTION,
+        send_date: Date.now(),
+    };
+    
+    chat.splice(lastUserIdx + 1, 0, systemMessage);
+    
+    console.log(`[${MODULE_NAME}] Instruction injected at index ${lastUserIdx + 1}`);
+};
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 async function init() {
     console.log(`[${MODULE_NAME}] Loading...`);
     try {
-        const { renderExtensionTemplateAsync } = SillyTavern.getContext();
+        const { renderExtensionTemplateAsync, eventSource, event_types } = SillyTavern.getContext();
         const html = await renderExtensionTemplateAsync(`third-party/${MODULE_NAME}`, 'settings');
         $('#extensions_settings2').append(html);
 
         $('#simulate_hud_enabled').on('change', onEnabledChange);
+
+        // Setup message formatter to hide JSON blocks
+        setupMessageFormatter();
+        
+        // Listen for character messages to parse stats
+        eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, onCharacterMessageRendered);
 
         syncUI();
         syncBubble();
