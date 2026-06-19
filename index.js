@@ -10,6 +10,13 @@ const defaultSettings = Object.freeze({
         hygiene:    { current: 100, max: 100 },
         boosts: [],
     }),
+    world: Object.freeze({
+        time: '12:00 PM',
+        date: 'Mon, 01/01/25',
+        weather: 'Clear',
+        location: 'Unknown',
+        money: Object.freeze({ amount: 0, currency: 'G' }),
+    }),
 });
 
 function getSettings() {
@@ -27,6 +34,20 @@ function getSettings() {
         if (!s[sk]) s[sk] = structuredClone(defaultSettings.stats[sk]);
     }
     if (!Array.isArray(s.boosts)) s.boosts = [];
+
+    // Ensure world object exists with all keys
+    const w = extensionSettings[MODULE_NAME].world;
+    if (!w || typeof w !== 'object') {
+        extensionSettings[MODULE_NAME].world = structuredClone(defaultSettings.world);
+    } else {
+        for (const wk of Object.keys(defaultSettings.world)) {
+            if (!Object.hasOwn(w, wk)) w[wk] = structuredClone(defaultSettings.world[wk]);
+        }
+        if (!w.money || typeof w.money !== 'object') {
+            w.money = structuredClone(defaultSettings.world.money);
+        }
+    }
+
     return extensionSettings[MODULE_NAME];
 }
 
@@ -120,7 +141,10 @@ function makeDraggable(el, onTap) {
 
 const TABS = [
     { id: 'vitals', label: 'Vitals', icon: 'fa-solid fa-heart-pulse' },
+    { id: 'world',  label: 'World',  icon: 'fa-solid fa-globe' },
 ];
+
+let activeTabId = TABS[0].id;
 
 function getStatInfo(statId, current, max) {
     const pct = max > 0 ? current / max : 0;
@@ -189,12 +213,45 @@ function renderVitalsTab(stats) {
         </div>`;
 }
 
+function renderInfoRow(icon, label, value, valueColor) {
+    const colorStyle = valueColor ? ` style="color:${valueColor}"` : '';
+    return `
+        <div class="shud-info-row">
+            <span class="shud-info-icon"><i class="${icon}"></i></span>
+            <span class="shud-info-label">${label}</span>
+            <span class="shud-info-value"${colorStyle}>${value}</span>
+        </div>`;
+}
+
+function renderWorldTab(world) {
+    const money = world.money || { amount: 0, currency: 'G' };
+    const moneyStr = `${Number(money.amount).toLocaleString()} ${money.currency}`;
+    return `
+        <div class="shud-tab-content" id="shud-tab-world">
+            <div class="shud-info-card">
+                ${renderInfoRow('fa-solid fa-clock',       'Time',     `${world.time} | ${world.date}`)}
+                ${renderInfoRow('fa-solid fa-cloud-sun',   'Weather',  world.weather)}
+                ${renderInfoRow('fa-solid fa-location-dot','Location', world.location)}
+                ${renderInfoRow('fa-solid fa-coins',       'Money',    moneyStr, '#e8c46b')}
+            </div>
+        </div>`;
+}
+
+function renderTabBody(tabId, settings) {
+    switch (tabId) {
+        case 'world':
+            return renderWorldTab(settings.world || defaultSettings.world);
+        case 'vitals':
+        default:
+            return renderVitalsTab(settings.stats || defaultSettings.stats);
+    }
+}
+
 function renderMenuContent(menu) {
     const settings = getSettings();
-    const stats = settings.stats || defaultSettings.stats;
 
-    const navItems = TABS.map((t, i) => `
-        <button class="shud-tab-btn${i === 0 ? ' active' : ''}" data-tab="${t.id}">
+    const navItems = TABS.map(t => `
+        <button class="shud-tab-btn${t.id === activeTabId ? ' active' : ''}" data-tab="${t.id}">
             <i class="${t.icon}"></i> ${t.label}
         </button>`).join('');
 
@@ -202,13 +259,18 @@ function renderMenuContent(menu) {
     body.innerHTML = `
         <div class="shud-navbar">${navItems}</div>
         <div class="shud-tab-area">
-            ${renderVitalsTab(stats)}
+            ${renderTabBody(activeTabId, settings)}
         </div>`;
 
     body.querySelectorAll('.shud-tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
+            const tabId = btn.getAttribute('data-tab');
+            if (tabId === activeTabId) return;
+            activeTabId = tabId;
             body.querySelectorAll('.shud-tab-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
+            const area = body.querySelector('.shud-tab-area');
+            if (area) area.innerHTML = renderTabBody(activeTabId, settings);
         });
     });
 }

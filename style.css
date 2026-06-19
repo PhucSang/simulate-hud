@@ -299,3 +299,53 @@
     font-size: 11px;
     color: #7a90a8;
 }
+
+/* ── World Tab — Info Card ── */
+.shud-info-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 12px;
+    padding: 6px 14px;
+}
+
+.shud-info-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    font-size: 14px;
+}
+
+.shud-info-row:last-child {
+    border-bottom: none;
+}
+
+.shud-info-icon {
+    width: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #a98ee0;
+    flex-shrink: 0;
+}
+
+.shud-info-icon i {
+    font-size: 15px;
+}
+
+.shud-info-label {
+    color: #9a92b8;
+    font-weight: 500;
+    flex-shrink: 0;
+    min-width: 70px;
+}
+
+.shud-info-value {
+    color: #ddd5f5;
+    font-weight: 600;
+    text-align: right;
+    margin-left: auto;
+    word-break: break-word;
+    font-variant-numeric: tabular-nums;
+}
