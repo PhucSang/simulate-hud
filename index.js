@@ -17,6 +17,11 @@ const defaultSettings = Object.freeze({
         location: 'Unknown',
         money: Object.freeze({ amount: 0, currency: 'G' }),
     }),
+    guide: Object.freeze({
+        tasks: [],
+        shouldDo: '',
+        hint: '',
+    }),
 });
 
 function getSettings() {
@@ -46,6 +51,16 @@ function getSettings() {
         if (!w.money || typeof w.money !== 'object') {
             w.money = structuredClone(defaultSettings.world.money);
         }
+    }
+
+    // Ensure guide object exists with all keys
+    const g = extensionSettings[MODULE_NAME].guide;
+    if (!g || typeof g !== 'object') {
+        extensionSettings[MODULE_NAME].guide = structuredClone(defaultSettings.guide);
+    } else {
+        if (!Array.isArray(g.tasks)) g.tasks = [];
+        if (typeof g.shouldDo !== 'string') g.shouldDo = '';
+        if (typeof g.hint !== 'string') g.hint = '';
     }
 
     return extensionSettings[MODULE_NAME];
@@ -142,6 +157,7 @@ function makeDraggable(el, onTap) {
 const TABS = [
     { id: 'vitals', label: 'Vitals', icon: 'fa-solid fa-heart-pulse' },
     { id: 'world',  label: 'World',  icon: 'fa-solid fa-globe' },
+    { id: 'guide',  label: 'Guide',  icon: 'fa-solid fa-compass' },
 ];
 
 let activeTabId = TABS[0].id;
@@ -237,10 +253,48 @@ function renderWorldTab(world) {
         </div>`;
 }
 
+function renderGuideTab(guide) {
+    const tasks = Array.isArray(guide.tasks) ? guide.tasks : [];
+    const taskHTML = tasks.length === 0
+        ? '<div class="shud-guide-empty">None</div>'
+        : tasks.map(t => `
+            <details class="shud-task-item">
+                <summary class="shud-task-summary">${t.name || 'Untitled Task'}</summary>
+                <div class="shud-task-content">${t.content || ''}</div>
+            </details>`).join('');
+
+    const shouldDo = guide.shouldDo && guide.shouldDo.length > 0 ? guide.shouldDo : '—';
+    const hint = guide.hint && guide.hint.length > 0 ? guide.hint : '—';
+
+    return `
+        <div class="shud-tab-content" id="shud-tab-guide">
+            <div class="shud-guide-section">
+                <div class="shud-guide-title">
+                    <i class="fa-solid fa-list-check"></i> Task / Quest
+                </div>
+                <div class="shud-guide-body">${taskHTML}</div>
+            </div>
+            <div class="shud-guide-section">
+                <div class="shud-guide-title">
+                    <i class="fa-solid fa-arrow-right"></i> What you should do
+                </div>
+                <div class="shud-guide-body shud-guide-text">${shouldDo}</div>
+            </div>
+            <div class="shud-guide-section">
+                <div class="shud-guide-title">
+                    <i class="fa-solid fa-lightbulb"></i> Hint
+                </div>
+                <div class="shud-guide-body shud-guide-text">${hint}</div>
+            </div>
+        </div>`;
+}
+
 function renderTabBody(tabId, settings) {
     switch (tabId) {
         case 'world':
             return renderWorldTab(settings.world || defaultSettings.world);
+        case 'guide':
+            return renderGuideTab(settings.guide || defaultSettings.guide);
         case 'vitals':
         default:
             return renderVitalsTab(settings.stats || defaultSettings.stats);
