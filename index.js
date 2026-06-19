@@ -337,6 +337,113 @@ function syncBubble() {
     }
 }
 
+// ── Prompt Interceptor (inject HUD instruction) ───────────────────────────────
+
+const HUD_INSTRUCTION = `[SYSTEM — Simulate HUD]
+At the very end of EVERY reply, you MUST append a fenced code block tagged "hud-stats" containing a single JSON object with the character's current vitals. Format:
+\`\`\`hud-stats
+{"energy": <0-100>, "sustenance": <0-100>, "hygiene": <0-100>}
+\`\`\`
+Rules:
+- Values are integers 0..100 reflecting the character's realistic state after the events of this reply.
+- This block is machine-read by the UI and must be the LAST thing in your message.
+- Never mention or describe these stats outside the block.
+- Keep roleplaying normally above the block.`;
+
+globalThis.simulateHudInterceptor = async function (chat, contextSize, abort, type) {
+    // Only inject for normal replies, not background/quiet/impersonate generations.
+    if (type === 'quiet' || type === 'impersonate') return;
+
+    const systemNote = {
+        is_user: false,
+        is_system: true,
+        name: 'system',
+        send_date: Date.now(),
+        mes: HUD_INSTRUCTION,
+    };
+
+    // Insert before the last message (the pending user turn) so the model sees it.
+    chat.splice(chat.length - 1, 0, systemNote);
+};
+
+// ── HUD block parsing & stat update ───────────────────────────────────────────
+
+const HUD_BLOCK_REGEX = /```hud-stats\s*([\s\S]*?)```/i;
+
+function parseHudBlock(mes) {
+    if (typeof mes !== 'string') return { json: null, cleaned: mes };
+    const match = mes.match(HUD_BLOCK_REGEX);
+    if (!match) return { json: null, cleaned: mes };
+
+    let json = null;
+    try {
+        json = JSON.parse(match[1].trim());
+    } catch {
+        json = null;
+    }
+    const cleaned = mes.replace(HUD_BLOCK_REGEX, '').replace(/\s+$/, '\n').trimEnd();
+    return { json, cleaned };
+}
+
+function applyHudStats(json) {
+    if (!json || typeof json !== 'object') return false;
+    const settings = getSettings();
+    const stats = settings.stats;
+    let changed = false;
+    for (const key of ['energy', 'sustenance', 'hygiene']) {
+        if (typeof json[key] === 'number' && Number.isFinite(json[key])) {
+            const max = stats[key]?.max ?? 100;
+            const clamped = Math.max(0, Math.min(max, Math.round(json[key])));
+            if (stats[key].current !== clamped) {
+                stats[key].current = clamped;
+                changed = true;
+            }
+        }
+    }
+    return changed;
+}
+
+function refreshMenuIfOpen() {
+    const menu = getMenu();
+    if (menu) renderMenuContent(menu);
+}
+
+function onMessageReceived(data) {
+    try {
+        const { chat, saveSettingsDebounced } = SillyTavern.getContext();
+        // Resolve the message object defensively (event data shape varies).
+        let message = null;
+        if (data && typeof data === 'object') {
+            message = data.message ?? data.mes ?? null;
+        }
+        if (!message && Array.isArray(chat) && chat.length > 0) {
+            // Fallback: last non-user message.
+            for (let i = chat.length - 1; i >= 0; i--) {
+                if (!chat[i].is_user) { message = chat[i]; break; }
+            }
+        }
+        if (!message || typeof message.mes !== 'string') return;
+
+        const { json, cleaned } = parseHudBlock(message.mes);
+        if (json) {
+            const changed = applyHudStats(json);
+            if (changed) saveSettingsDebounced();
+            console.debug(`[${MODULE_NAME}] HUD stats updated:`, json);
+        } else if (HUD_BLOCK_REGEX.test(message.mes)) {
+            console.warn(`[${MODULE_NAME}] Failed to parse hud-stats block`);
+        }
+
+        // Strip the block from the message so it never renders or pollutes context.
+        if (cleaned !== message.mes) {
+            message.mes = cleaned;
+        }
+
+        refreshMenuIfOpen();
+    } catch (err) {
+        console.error(`[${MODULE_NAME}] onMessageReceived error:`, err);
+    }
+}
+
 // ── Settings UI ───────────────────────────────────────────────────────────────
 
 function onEnabledChange() {
@@ -357,11 +464,13 @@ function syncUI() {
 async function init() {
     console.log(`[${MODULE_NAME}] Loading...`);
     try {
-        const { renderExtensionTemplateAsync } = SillyTavern.getContext();
+        const { renderExtensionTemplateAsync, eventSource, event_types } = SillyTavern.getContext();
         const html = await renderExtensionTemplateAsync(`third-party/${MODULE_NAME}`, 'settings');
         $('#extensions_settings2').append(html);
 
         $('#simulate_hud_enabled').on('change', onEnabledChange);
+
+        eventSource.on(event_types.MESSAGE_RECEIVED, onMessageReceived);
 
         syncUI();
         syncBubble();
