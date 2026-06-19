@@ -257,9 +257,14 @@ function renderGuideTab(guide) {
     const tasks = Array.isArray(guide.tasks) ? guide.tasks : [];
     const taskHTML = tasks.length === 0
         ? '<div class="shud-guide-empty">None</div>'
-        : tasks.map(t => `
+        : tasks.map((t, i) => `
             <details class="shud-task-item">
-                <summary class="shud-task-summary">${t.name || 'Untitled Task'}</summary>
+                <summary class="shud-task-summary">
+                    <span class="shud-task-name">${t.name || 'Untitled Task'}</span>
+                    <button class="shud-task-delete" data-task-index="${i}" title="Remove quest">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </summary>
                 <div class="shud-task-content">${t.content || ''}</div>
             </details>`).join('');
 
@@ -325,6 +330,27 @@ function renderMenuContent(menu) {
             btn.classList.add('active');
             const area = body.querySelector('.shud-tab-area');
             if (area) area.innerHTML = renderTabBody(activeTabId, settings);
+            attachGuideHandlers(body);
+        });
+    });
+
+    attachGuideHandlers(body);
+}
+
+function attachGuideHandlers(body) {
+    const { saveSettingsDebounced } = SillyTavern.getContext();
+    body.querySelectorAll('.shud-task-delete').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const idx = parseInt(btn.getAttribute('data-task-index'), 10);
+            if (Number.isNaN(idx)) return;
+            const settings = getSettings();
+            if (Array.isArray(settings.guide.tasks) && idx >= 0 && idx < settings.guide.tasks.length) {
+                settings.guide.tasks.splice(idx, 1);
+                saveSettingsDebounced();
+                refreshMenuIfOpen();
+            }
         });
     });
 }
@@ -456,9 +482,9 @@ function syncBubble() {
 // ── Prompt Interceptor (inject HUD instruction) ───────────────────────────────
 
 const HUD_INSTRUCTION = `[SYSTEM — Simulate HUD]
-At the very end of EVERY reply, you MUST append a fenced code block tagged "hud-stats" containing a single JSON object with the character's current vitals AND world state. Format:
+At the very end of EVERY reply, you MUST append a fenced code block tagged "hud-stats" containing a single JSON object with the character's current vitals, world state, and guide info. Format:
 \`\`\`hud-stats
-{"energy": <0-100>, "sustenance": <0-100>, "hygiene": <0-100>, "time": "HH:MM AM/PM", "date": "Weekday, dd/mm/yy", "weather": "<text>", "location": "<text>", "money": {"amount": <number>, "currency": "<code>"}}
+{"energy": <0-100>, "sustenance": <0-100>, "hygiene": <0-100>, "time": "HH:MM AM/PM", "date": "Weekday, dd/mm/yy", "weather": "<text>", "location": "<text>", "money": {"amount": <number>, "currency": "<code>"}, "shouldDo": "<text>", "hint": "<text>", "tasks": [{"name": "<text>", "content": "<text>"}]}
 \`\`\`
 Rules:
 - energy/sustenance/hygiene: integers 0..100 reflecting the character's realistic state after the events of this reply.
@@ -467,6 +493,9 @@ Rules:
 - weather: short description of current weather.
 - location: where the character currently is.
 - money: object with "amount" (integer >= 0) and "currency" (short code, e.g. "G").
+- shouldDo: string — suggestions on where to go, who to talk to, what to prioritize based on current session context (story state, NPC interactions, world events).
+- hint: string — soft hints toward solving current tasks (directions, leads, next logical steps). Do NOT fully solve — give enough to unstick the player, preserve discovery.
+- tasks: array of {"name": string, "content": string}. ONLY include the "tasks" key when a quest's state changes or a new quest appears. OMIT "tasks" entirely if no quest changes in this reply.
 - This block is machine-read by the UI and must be the LAST thing in your message.
 - Never mention or describe these values outside the block.
 - Keep roleplaying normally above the block.`;
@@ -540,6 +569,28 @@ function applyHudData(json) {
         }
         if (typeof json.money.currency === 'string' && json.money.currency.length > 0) {
             if (m.currency !== json.money.currency) { m.currency = json.money.currency; changed = true; }
+        }
+    }
+
+    // ── Guide (shouldDo & hint update every reply; tasks only when present) ──
+    const guide = settings.guide;
+    if (typeof json.shouldDo === 'string' && guide.shouldDo !== json.shouldDo) {
+        guide.shouldDo = json.shouldDo;
+        changed = true;
+    }
+    if (typeof json.hint === 'string' && guide.hint !== json.hint) {
+        guide.hint = json.hint;
+        changed = true;
+    }
+    // Only replace tasks when the bot explicitly includes the "tasks" key.
+    if (Array.isArray(json.tasks)) {
+        const cleanTasks = json.tasks
+            .filter(t => t && typeof t === 'object' && typeof t.name === 'string' && t.name.length > 0)
+            .map(t => ({ name: t.name, content: typeof t.content === 'string' ? t.content : '' }));
+        // Shallow compare by JSON string to detect real change.
+        if (JSON.stringify(guide.tasks) !== JSON.stringify(cleanTasks)) {
+            guide.tasks = cleanTasks;
+            changed = true;
         }
     }
 

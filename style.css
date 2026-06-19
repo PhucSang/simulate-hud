@@ -413,6 +413,37 @@
     touch-action: manipulation;
 }
 
+.shud-task-name {
+    flex: 1;
+}
+
+.shud-task-delete {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #b8aec8;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 11px;
+    touch-action: manipulation;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.shud-task-delete:hover {
+    background: rgba(232, 107, 107, 0.2);
+    color: #ff8a8a;
+    border-color: rgba(232, 107, 107, 0.4);
+}
+
+.shud-task-delete:active {
+    background: rgba(232, 107, 107, 0.35);
+}
+
 .shud-task-summary::-webkit-details-marker {
     display: none;
 }
