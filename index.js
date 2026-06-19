@@ -495,7 +495,7 @@ Rules:
 - money: object with "amount" (integer >= 0) and "currency" (short code, e.g. "G").
 - shouldDo: string — suggestions on where to go, who to talk to, what to prioritize based on current session context (story state, NPC interactions, world events).
 - hint: string — soft hints toward solving current tasks (directions, leads, next logical steps). Do NOT fully solve — give enough to unstick the player, preserve discovery.
-- tasks: array of {"name": string, "content": string}. ONLY include the "tasks" key when a quest's state changes or a new quest appears. OMIT "tasks" entirely if no quest changes in this reply.
+- tasks: array of {"name": string, "content": string}. Include EVERY reply with ALL currently active quests, even if unchanged. If there are no active quests, include an empty array.
 - This block is machine-read by the UI and must be the LAST thing in your message.
 - Never mention or describe these values outside the block.
 - Keep roleplaying normally above the block.`;
@@ -572,7 +572,7 @@ function applyHudData(json) {
         }
     }
 
-    // ── Guide (shouldDo & hint update every reply; tasks only when present) ──
+    // ── Guide (shouldDo, hint, tasks all update every reply) ──
     const guide = settings.guide;
     if (typeof json.shouldDo === 'string' && guide.shouldDo !== json.shouldDo) {
         guide.shouldDo = json.shouldDo;
@@ -582,16 +582,13 @@ function applyHudData(json) {
         guide.hint = json.hint;
         changed = true;
     }
-    // Only replace tasks when the bot explicitly includes the "tasks" key.
+    // Tasks: always replace (bot includes full list every reply now).
     if (Array.isArray(json.tasks)) {
         const cleanTasks = json.tasks
             .filter(t => t && typeof t === 'object' && typeof t.name === 'string' && t.name.length > 0)
             .map(t => ({ name: t.name, content: typeof t.content === 'string' ? t.content : '' }));
-        // Shallow compare by JSON string to detect real change.
-        if (JSON.stringify(guide.tasks) !== JSON.stringify(cleanTasks)) {
-            guide.tasks = cleanTasks;
-            changed = true;
-        }
+        guide.tasks = cleanTasks;
+        changed = true;
     }
 
     return changed;
