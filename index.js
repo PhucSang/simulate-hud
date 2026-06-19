@@ -402,14 +402,19 @@ function syncBubble() {
 // ── Prompt Interceptor (inject HUD instruction) ───────────────────────────────
 
 const HUD_INSTRUCTION = `[SYSTEM — Simulate HUD]
-At the very end of EVERY reply, you MUST append a fenced code block tagged "hud-stats" containing a single JSON object with the character's current vitals. Format:
+At the very end of EVERY reply, you MUST append a fenced code block tagged "hud-stats" containing a single JSON object with the character's current vitals AND world state. Format:
 \`\`\`hud-stats
-{"energy": <0-100>, "sustenance": <0-100>, "hygiene": <0-100>}
+{"energy": <0-100>, "sustenance": <0-100>, "hygiene": <0-100>, "time": "HH:MM AM/PM", "date": "Weekday, dd/mm/yy", "weather": "<text>", "location": "<text>", "money": {"amount": <number>, "currency": "<code>"}}
 \`\`\`
 Rules:
-- Values are integers 0..100 reflecting the character's realistic state after the events of this reply.
+- energy/sustenance/hygiene: integers 0..100 reflecting the character's realistic state after the events of this reply.
+- time: current in-world time, format "HH:MM AM/PM".
+- date: current in-world date, format "Weekday, dd/mm/yy".
+- weather: short description of current weather.
+- location: where the character currently is.
+- money: object with "amount" (integer >= 0) and "currency" (short code, e.g. "G").
 - This block is machine-read by the UI and must be the LAST thing in your message.
-- Never mention or describe these stats outside the block.
+- Never mention or describe these values outside the block.
 - Keep roleplaying normally above the block.`;
 
 globalThis.simulateHudInterceptor = async function (chat, contextSize, abort, type) {
@@ -447,11 +452,13 @@ function parseHudBlock(mes) {
     return { json, cleaned };
 }
 
-function applyHudStats(json) {
+function applyHudData(json) {
     if (!json || typeof json !== 'object') return false;
     const settings = getSettings();
-    const stats = settings.stats;
     let changed = false;
+
+    // ── Vitals ──
+    const stats = settings.stats;
     for (const key of ['energy', 'sustenance', 'hygiene']) {
         if (typeof json[key] === 'number' && Number.isFinite(json[key])) {
             const max = stats[key]?.max ?? 100;
@@ -462,6 +469,26 @@ function applyHudStats(json) {
             }
         }
     }
+
+    // ── World ──
+    const world = settings.world;
+    for (const key of ['time', 'date', 'weather', 'location']) {
+        if (typeof json[key] === 'string' && json[key].length > 0 && world[key] !== json[key]) {
+            world[key] = json[key];
+            changed = true;
+        }
+    }
+    if (json.money && typeof json.money === 'object') {
+        const m = world.money;
+        if (typeof json.money.amount === 'number' && Number.isFinite(json.money.amount)) {
+            const amt = Math.max(0, Math.round(json.money.amount));
+            if (m.amount !== amt) { m.amount = amt; changed = true; }
+        }
+        if (typeof json.money.currency === 'string' && json.money.currency.length > 0) {
+            if (m.currency !== json.money.currency) { m.currency = json.money.currency; changed = true; }
+        }
+    }
+
     return changed;
 }
 
@@ -488,7 +515,7 @@ function onMessageReceived(data) {
 
         const { json, cleaned } = parseHudBlock(message.mes);
         if (json) {
-            const changed = applyHudStats(json);
+            const changed = applyHudData(json);
             if (changed) saveSettingsDebounced();
             console.debug(`[${MODULE_NAME}] HUD stats updated:`, json);
         } else if (HUD_BLOCK_REGEX.test(message.mes)) {
