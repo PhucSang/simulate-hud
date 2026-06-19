@@ -618,7 +618,9 @@ function onMessageReceived(data) {
         }
         if (!message || typeof message.mes !== 'string') return;
 
-        const { json, cleaned } = parseHudBlock(message.mes);
+        // Parse & update state, but DO NOT strip — keep JSON in mes so bot sees
+        // previous state and we can restore on delete/chat-switch.
+        const { json } = parseHudBlock(message.mes);
         if (json) {
             const changed = applyHudData(json);
             if (changed) saveSettingsDebounced();
@@ -627,15 +629,84 @@ function onMessageReceived(data) {
             console.warn(`[${MODULE_NAME}] Failed to parse hud-stats block`);
         }
 
-        // Strip the block from the message so it never renders or pollutes context.
-        if (cleaned !== message.mes) {
-            message.mes = cleaned;
-        }
-
         refreshMenuIfOpen();
     } catch (err) {
         console.error(`[${MODULE_NAME}] onMessageReceived error:`, err);
     }
+}
+
+// ── Restore state from chat history ───────────────────────────────────────────
+
+function restoreStateFromChat() {
+    try {
+        const { chat, saveSettingsDebounced } = SillyTavern.getContext();
+        if (!Array.isArray(chat) || chat.length === 0) {
+            // No chat — reset to defaults.
+            resetToDefaults();
+            refreshMenuIfOpen();
+            return;
+        }
+
+        // Scan from the last message backwards to find the most recent hud-stats block.
+        for (let i = chat.length - 1; i >= 0; i--) {
+            const msg = chat[i];
+            if (!msg || typeof msg.mes !== 'string') continue;
+            const { json } = parseHudBlock(msg.mes);
+            if (json) {
+                applyHudData(json);
+                saveSettingsDebounced();
+                console.debug(`[${MODULE_NAME}] State restored from message ${i}`);
+                refreshMenuIfOpen();
+                return;
+            }
+        }
+
+        // No hud-stats block found in any message — reset to defaults.
+        resetToDefaults();
+        refreshMenuIfOpen();
+    } catch (err) {
+        console.error(`[${MODULE_NAME}] restoreStateFromChat error:`, err);
+    }
+}
+
+function resetToDefaults() {
+    const settings = getSettings();
+    settings.stats = structuredClone(defaultSettings.stats);
+    settings.world = structuredClone(defaultSettings.world);
+    settings.guide = structuredClone(defaultSettings.guide);
+    const { saveSettingsDebounced } = SillyTavern.getContext();
+    saveSettingsDebounced();
+    console.debug(`[${MODULE_NAME}] State reset to defaults`);
+}
+
+// ── Hide hud-stats block from rendered DOM ────────────────────────────────────
+
+function hideHudBlocksInDOM() {
+    // ST renders ```hud-stats as <pre><code class="language-hud-stats">
+    document.querySelectorAll('code.language-hud-stats').forEach(code => {
+        const pre = code.closest('pre');
+        if (pre) pre.style.display = 'none';
+    });
+    // Also catch any .hljs that might wrap it
+    document.querySelectorAll('.hljs.language-hud-stats').forEach(el => {
+        const pre = el.closest('pre');
+        if (pre) pre.style.display = 'none';
+    });
+}
+
+function onCharacterMessageRendered() {
+    // Defer slightly to ensure DOM is fully painted.
+    requestAnimationFrame(hideHudBlocksInDOM);
+}
+
+function onChatChanged() {
+    // When chat switches, restore state from the new chat's message history.
+    restoreStateFromChat();
+}
+
+function onMessageDeleted() {
+    // When a message is deleted, re-scan to find the now-last hud-stats block.
+    restoreStateFromChat();
 }
 
 // ── Settings UI ───────────────────────────────────────────────────────────────
@@ -665,6 +736,13 @@ async function init() {
         $('#simulate_hud_enabled').on('change', onEnabledChange);
 
         eventSource.on(event_types.MESSAGE_RECEIVED, onMessageReceived);
+        eventSource.on(event_types.CHARACTER_MESSAGE_RENDERED, onCharacterMessageRendered);
+        eventSource.on(event_types.CHAT_CHANGED, onChatChanged);
+        eventSource.on(event_types.MESSAGE_DELETED, onMessageDeleted);
+
+        // Restore state for the current chat on load.
+        restoreStateFromChat();
+        hideHudBlocksInDOM();
 
         syncUI();
         syncBubble();

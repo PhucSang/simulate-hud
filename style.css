@@ -463,3 +463,15 @@
     white-space: pre-wrap;
     line-height: 1.45;
 }
+
+/* ── Hide hud-stats JSON block from rendered messages ── */
+/* ST renders ```hud-stats as <pre><code class="language-hud-stats"> */
+pre:has(code.language-hud-stats) {
+    display: none !important;
+}
+code.language-hud-stats {
+    display: none !important;
+}
+.hljs.language-hud-stats {
+    display: none !important;
+}
